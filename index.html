@@ -37,6 +37,7 @@
             padding: 36px 20px;
             display: flex;
             justify-content: center;
+            padding-bottom: 120px;
         }
 
         .wrap {
@@ -378,6 +379,19 @@
                 }
             }
 
+            /*
+            function update() {
+                const vpH = window.innerHeight || document.documentElement.clientHeight;
+                // small offset so words appear slightly before fully in view
+                const offset = -20;
+                wordNodes.forEach(el => {
+                    const r = el.getBoundingClientRect();
+                    if (r.top < vpH - offset) el.classList.add('visible');
+                    else el.classList.remove('visible');
+                });
+            }
+            */
+
             update();
             window.addEventListener('scroll', onScroll, { passive: true });
             window.addEventListener('resize', onScroll);
@@ -409,6 +423,35 @@
 
             document.querySelectorAll('.fade-observe').forEach(el => io.observe(el));
         })();
+
+        (function lineObserverReveal() {
+            const lines = Array.from(document.querySelectorAll('.poem-line'));
+
+            const io = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    const words = Array.from(entry.target.querySelectorAll('.word'));
+                    if (entry.isIntersecting) {
+                        // staggered reveal for nicer rhythm
+                        words.forEach((w, i) => {
+                            w._revealTimeout = setTimeout(() => w.classList.add('visible'), i * 35);
+                        });
+                    } else {
+                        // cancel any pending reveals and hide words again
+                        words.forEach(w => {
+                            if (w._revealTimeout) { clearTimeout(w._revealTimeout); w._revealTimeout = null; }
+                            w.classList.remove('visible');
+                        });
+                    }
+                });
+            }, {
+                root: null,
+                rootMargin: '0px 0px -15% 0px', // reveal a bit earlier before fully in view
+                threshold: 0.03
+            });
+
+            lines.forEach(l => io.observe(l));
+        })();
+
     </script>
 </body>
 
