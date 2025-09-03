@@ -344,60 +344,6 @@
             });
         })();
 
-        // Scroll-based reveal: unchanged logic but kept responsive for bottom lines
-        (function scrollReveal() {
-            const poemWrap = document.getElementById('poem-wrap');
-            const wordNodes = Array.from(document.querySelectorAll('#poem .word'));
-            const total = wordNodes.length;
-
-            let ticking = false;
-            function onScroll() {
-                if (!ticking) {
-                    window.requestAnimationFrame(() => { update(); ticking = false; });
-                    ticking = true;
-                }
-            }
-
-            function clamp(v, a = 0, b = 1) { return Math.max(a, Math.min(b, v)); }
-
-            function update() {
-                const rect = poemWrap.getBoundingClientRect();
-                const vpH = window.innerHeight || document.documentElement.clientHeight;
-
-                // progress from 0 -> 1 as poem travels through viewport (ensures bottom words reveal)
-                const progress = clamp((vpH - rect.top * 1.4) / (rect.height + vpH), 0, 1);
-
-                const eased = progress < 0.5
-                    ? 4 * progress * progress * progress
-                    : 1 - Math.pow(-2 * progress + 2, 3) / 2;
-
-                const revealCount = Math.round(eased * total);
-
-                for (let i = 0; i < total; i++) {
-                    const el = wordNodes[i];
-                    if (i < revealCount) el.classList.add('visible');
-                    else el.classList.remove('visible');
-                }
-            }
-
-            /*
-            function update() {
-                const vpH = window.innerHeight || document.documentElement.clientHeight;
-                // small offset so words appear slightly before fully in view
-                const offset = -20;
-                wordNodes.forEach(el => {
-                    const r = el.getBoundingClientRect();
-                    if (r.top < vpH - offset) el.classList.add('visible');
-                    else el.classList.remove('visible');
-                });
-            }
-            */
-
-            update();
-            window.addEventListener('scroll', onScroll, { passive: true });
-            window.addEventListener('resize', onScroll);
-        })();
-
         // Stronger IntersectionObserver for .fade-observe
         (function fadeInObserver() {
             const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
