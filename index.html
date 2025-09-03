@@ -364,7 +364,7 @@
                 const vpH = window.innerHeight || document.documentElement.clientHeight;
 
                 // progress from 0 -> 1 as poem travels through viewport (ensures bottom words reveal)
-                const progress = clamp((vpH + 300 - rect.top) / (rect.height + vpH), 0, 1);
+                const progress = clamp((vpH - rect.top * 1.4) / (rect.height + vpH), 0, 1);
 
                 const eased = progress < 0.5
                     ? 4 * progress * progress * progress
