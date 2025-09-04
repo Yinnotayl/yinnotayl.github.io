@@ -529,63 +529,148 @@
 
 
         // config
-        const API_ENDPOINT = 'https://nuthatch.lastelm.software/v2/birds?family=Troglodytidae&hasImg=true';
-        const API_KEY = '60cf5b6c-b268-4dbd-924f-4443d4d38cc5'; // <-- replace me
+        function getApiEndpoint(family) {
+            return `https://nuthatch.lastelm.software/v2/birds?family=${encodeURIComponent(family)}&hasImg=true`;
+        }
+        const API_KEY = '60cf5b6c-b268-4dbd-924f-4443d4d38cc5'; // consider moving to a server later
         const PLACEHOLDER = 'https://images3.memedroid.com/images/UPLOADED32/6020b8ee6ffaa.jpeg';
 
         let cachedBirds = null;
-        let currentFamily = 'Troglodytidae';
+        let lastImgUrl = null;
+        const FAMILIES = [
+            'Accipitridae', 'Alcidae', 'Alcedinidae', 'Alaudidae',
+            'Anatidae', 'Apodidae', 'Ardeidae',
+            'Cathartidae', 'Ciconiidae', 'Columbidae', 'Corvidae', 'Cuculidae', 'Falconidae', 'Fregatidae',
+            'Fringillidae', 'Hirundinidae', 'Icteridae', 'Laridae', 'Laniidae',
+            'Mimidae', 'Otididae',
+            'Pandionidae', 'Paridae', 'Passeridae', 'Passerellidae', 'Pelecanidae', 'Phaethontidae',
+            'Phasianidae', 'Picidae', 'Pipridae', 'Podicipedidae', 'Procellariidae', 'Psittacidae',
+            'Rallidae', 'Recurvirostridae', 'Scolopacidae', 'Spheniscidae', 'Sturnidae', 'Thamnophilidae',
+            'Tetraonidae', 'Thraupidae', 'Tinamidae', 'Turdidae', 'Turnicidae', 'Viduidae', 'Vireonidae',
+            'Zosteropidae', 'Troglodytidae', 'Parulidae', 'Muscicapidae', 'Phylloscopidae', 'Sylviidae',
+            'Cettiidae', 'Leiothrichidae', 'Hylocitreidae', 'Cotingidae', 'Tityridae', 'Oxyruncidae',
+            'Pipridae', 'Rhipiduridae', 'Monarchidae', 'Petroicidae', 'Meliphagidae', 'Estrildidae',
+            'Promeropidae', 'Calyptomenidae', 'Calyptomenidae', 'Prunellidae', 'Pycnonotidae',
+            'Sittidae', 'Certhiidae', 'Tichodromidae', 'Bombycillidae', 'Ptiliogonatidae', 'Aegithalidae',
+            'Remizidae', 'Paradoxornithidae', 'Panuridae', 'Regulidae', 'Seiuridae', 'Cyanocoracidae'
+        ];
+        let currentFamilyIndex = 0;
 
-        // fetch birds once and keep only entities with at least one image
-        async function fetchBirds() {
-            const res = await fetch(API_ENDPOINT, {
-                headers: { 'api-key': API_KEY }
-            });
-            if (!res.ok) throw new Error('Network response was not OK: ' + res.status);
-            return res.json();
+        // Convert an image entry to a usable URL (handles strings or objects)
+        function getImageUrl(img) {
+            if (!img) return null;
+            if (typeof img === 'string') return img;
+            if (typeof img === 'object') {
+                // common keys that might contain URL
+                return img.url || img.src || img.full || img.thumb || null;
+            }
+            return null;
         }
 
-        // pick a random bird and a random image from that bird
+        // Fetch and return a clean array of birds that actually have at least one usable image
+        async function fetchBirds(family) {
+            if (cachedBirds) return cachedBirds;
+            const endpoint = getApiEndpoint(family);
+            const res = await fetch(endpoint, { headers: { 'api-key': API_KEY } });
+            if (!res.ok) throw new Error('Network response was not OK: ' + res.status);
+            const json = await res.json();
+
+            const rawList = Array.isArray(json) ? json : (Array.isArray(json.entities) ? json.entities : []);
+            const items = rawList
+                .map(b => {
+                    const imgs = Array.isArray(b.images) ? b.images.map(getImageUrl).filter(Boolean) : [];
+                    return { ...b, images: imgs };
+                })
+                .filter(b => Array.isArray(b.images) && b.images.length > 0);
+
+            cachedBirds = items;
+            return items;
+        }
+
+
+        // pick a random bird+image safely
         function pickRandomImageFrom(birds) {
-            if (!birds || birds.length === 0) return null;
+            if (!Array.isArray(birds) || birds.length === 0) return null;
             const bird = birds[Math.floor(Math.random() * birds.length)];
+            if (!bird || !Array.isArray(bird.images) || bird.images.length === 0) return null;
             const imgUrl = bird.images[Math.floor(Math.random() * bird.images.length)];
             return { bird, imgUrl };
         }
 
-        // show one random birb in the DOM
-        async function showRandomBirb(family) {
+        // show one random birb in DOM (defensive)
+        async function showRandomBirb(family = FAMILIES[currentFamilyIndex]) {
             const imgEl = document.getElementById('birbImg');
             const captionEl = document.getElementById('birbCaption');
+            const btn = document.getElementById('newBirb');
 
-            // optimistic placeholder
+            if (btn) { btn.disabled = true; btn.classList.add('loading'); }
+
             imgEl.src = PLACEHOLDER;
             captionEl.textContent = 'Loading...';
 
-            const birds = await fetchBirds(family);
-            const chosen = pickRandomImageFrom(birds);
-            if (!chosen) {
-                imgEl.src = PLACEHOLDER;
-                captionEl.textContent = 'No birb images found :(';
-                return;
-            }
+            try {
+                const birds = await fetchBirds(family);
+                if (!Array.isArray(birds) || birds.length === 0) {
+                    imgEl.src = PLACEHOLDER;
+                    captionEl.textContent = 'No birb images found :(';
+                    return;
+                }
 
-            imgEl.src = chosen.imgUrl;
-            imgEl.alt = `${chosen.bird.name} (${chosen.bird.sciName || 'unknown'})`;
-            captionEl.innerHTML = `<strong>${chosen.bird.name}</strong> — <em>${chosen.bird.sciName || ''}</em>`;
+                let chosen = null;
+                const maxTries = 8;
+                for (let i = 0; i < maxTries; i++) {
+                    const c = pickRandomImageFrom(birds);
+                    if (!c) break;
+                    if (c.imgUrl !== lastImgUrl) { chosen = c; break; }
+                }
+                if (!chosen) chosen = pickRandomImageFrom(birds);
+
+                if (!chosen) {
+                    imgEl.src = PLACEHOLDER;
+                    captionEl.textContent = 'No birb images found :(';
+                } else {
+                    lastImgUrl = chosen.imgUrl;
+                    imgEl.src = chosen.imgUrl;
+                    imgEl.alt = `${chosen.bird.name || 'Unknown'} (${chosen.bird.sciName || ''})`;
+                    captionEl.innerHTML = `<strong>${chosen.bird.name || 'Unknown'}</strong> — <em>${chosen.bird.sciName || ''}</em>`;
+                }
+            } catch (err) {
+                console.error('showRandomBirb error:', err);
+                imgEl.src = PLACEHOLDER;
+                captionEl.textContent = 'Error loading birbs.';
+            } finally {
+                if (btn) { btn.disabled = false; btn.classList.remove('loading'); }
+            }
         }
 
-        // hookup buttons
-        document.getElementById('newBirb').addEventListener('click', () => showRandomBirb());
-        document.getElementById('shuffleBird').addEventListener('click', async () => {
-            // example: toggle family between Troglodytidae and another family
-            currentFamily = currentFamily === 'Troglodytidae' ? 'Fringillidae' : 'Troglodytidae';
-            cachedBirds = null; // force refetch for new family
-            await showRandomBirb(currentFamily);
+
+        // call to load initially
+        showRandomBirb();
+
+        // Hook the button (run after DOM loads)
+        document.addEventListener('DOMContentLoaded', () => {
+            const btn = document.getElementById('newBirb');
+            if (btn) {
+                btn.addEventListener('click', () => showRandomBirb());
+            } else {
+                console.warn('newBirb button not found — add id="newBirb" to your button.');
+            }
         });
 
-        // initial load
-        showRandomBirb();
+        document.addEventListener('DOMContentLoaded', () => {
+            const shuffleBtn = document.getElementById('shuffleBird');
+            if (shuffleBtn) {
+                shuffleBtn.addEventListener('click', async () => {
+                    currentFamilyIndex = (currentFamilyIndex + 1) % FAMILIES.length;
+                    const currentFamily = FAMILIES[currentFamilyIndex];
+                    cachedBirds = null; // force fetch new family
+                    shuffleBtn.textContent = `Source: ${currentFamily}`;
+                    await showRandomBirb(currentFamily);
+                });
+                // initialize label
+                shuffleBtn.textContent = `Source: ${FAMILIES[currentFamilyIndex]}`;
+            }
+        });
     </script>
 </body>
 
