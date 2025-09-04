@@ -529,7 +529,7 @@
 
 
         // config
-        const API_ENDPOINT = '/v2/birds?family=Troglodytidae&hasImg=true';
+        const API_ENDPOINT = 'https://nuthatch.lastelm.software/v2/birds?family=Troglodytidae&hasImg=true';
         const API_KEY = '60cf5b6c-b268-4dbd-924f-4443d4d38cc5'; // <-- replace me
         const PLACEHOLDER = 'https://images3.memedroid.com/images/UPLOADED32/6020b8ee6ffaa.jpeg';
 
@@ -537,21 +537,12 @@
         let currentFamily = 'Troglodytidae';
 
         // fetch birds once and keep only entities with at least one image
-        async function fetchBirds(family = currentFamily) {
-            if (cachedBirds && cachedBirds.family === family) return cachedBirds.items;
-            try {
-                const res = await fetch(`${API_ENDPOINT.replace(/family=[^&]*/, `family=${encodeURIComponent(family)}`)}`, {
-                    headers: { 'api-key': API_KEY }
-                });
-                if (!res.ok) throw new Error('Network response was not OK: ' + res.status);
-                const json = await res.json();
-                const items = (json.entities || []).filter(b => Array.isArray(b.images) && b.images.length > 0);
-                cachedBirds = { family, items };
-                return items;
-            } catch (err) {
-                console.error('fetchBirds error:', err);
-                return [];
-            }
+        async function fetchBirds() {
+            const res = await fetch(API_ENDPOINT, {
+                headers: { 'api-key': API_KEY }
+            });
+            if (!res.ok) throw new Error('Network response was not OK: ' + res.status);
+            return res.json();
         }
 
         // pick a random bird and a random image from that bird
